@@ -35,6 +35,4 @@ The default storage is backed by a simple sqlite file.
 
 The primary interaction is all done through a TUI powered by bubbletea V2. Docketeer tries to fit recommended patterns and utilize bubbles V2 components wherever possible.
 
-See tui.md for TUI implementation details
-
 Additionally, docketeer exposes a MCP interface which allows for a local agent to manage tasks on your behalf.
