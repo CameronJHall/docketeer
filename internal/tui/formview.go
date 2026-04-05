@@ -85,12 +85,10 @@ var allPriorities = []task.Priority{
 
 // NewFormView creates a blank form for a new item.
 func NewFormView(kind task.ItemKind, width, height int, projects []string) FormView {
-	s := task.StatusTodo
-	p := task.PriorityMedium
 	item := task.Item{
 		Kind:     kind,
-		Status:   &s,
-		Priority: &p,
+		Status:   new(task.StatusTodo),
+		Priority: new(task.PriorityMedium),
 	}
 	return newFormView(item, true, width, height, projects)
 }
@@ -505,10 +503,8 @@ func (f *FormView) submit() (tea.Model, tea.Cmd) {
 	f.item.Project = strings.TrimSpace(f.projectInput.Value())
 
 	if f.item.IsTask() {
-		s := allStatuses[f.statusIdx]
-		f.item.Status = &s
-		p := allPriorities[f.priorityIdx]
-		f.item.Priority = &p
+		f.item.Status = new(allStatuses[f.statusIdx])
+		f.item.Priority = new(allPriorities[f.priorityIdx])
 
 		if f.dueDateSet {
 			t := f.dueDatePicker.Time

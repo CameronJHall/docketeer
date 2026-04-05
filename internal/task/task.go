@@ -169,14 +169,11 @@ func (i *Item) Advance() bool {
 	}
 	switch *i.Status {
 	case StatusTodo:
-		s := StatusInProgress
-		i.Status = &s
+		i.Status = new(StatusInProgress)
 	case StatusInProgress:
-		s := StatusDone
-		i.Status = &s
+		i.Status = new(StatusDone)
 	case StatusBlocked:
-		s := StatusInProgress
-		i.Status = &s
+		i.Status = new(StatusInProgress)
 	case StatusDone:
 		return false
 	}
@@ -193,14 +190,11 @@ func (i *Item) Reverse() bool {
 	}
 	switch *i.Status {
 	case StatusDone:
-		s := StatusInProgress
-		i.Status = &s
+		i.Status = new(StatusInProgress)
 	case StatusInProgress:
-		s := StatusTodo
-		i.Status = &s
+		i.Status = new(StatusTodo)
 	case StatusBlocked:
-		s := StatusTodo
-		i.Status = &s
+		i.Status = new(StatusTodo)
 	case StatusTodo:
 		return false
 	}
@@ -230,10 +224,8 @@ func (i *Item) PromoteToTask() bool {
 		return false
 	}
 	i.Kind = KindTask
-	s := StatusTodo
-	i.Status = &s
-	p := PriorityLow
-	i.Priority = &p
+	i.Status = new(StatusTodo)
+	i.Priority = new(PriorityLow)
 	i.UpdatedAt = time.Now()
 	return true
 }

@@ -3,68 +3,26 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/CameronJHall/docketeer/internal/store/migrator"
 	"github.com/CameronJHall/docketeer/internal/task"
-	_ "modernc.org/sqlite"
+	_ "github.com/lib/pq"
 )
 
-// SQLiteStore is a Store backed by a SQLite database.
-type SQLiteStore struct {
+// PostgresStore is a Store backed by a PostgreSQL database.
+type PostgresStore struct {
 	db *sql.DB
 }
 
-// DefaultDBPath returns the XDG data dir path for the database.
-func DefaultDBPath() (string, error) {
-	dataDir, err := xdgDataDir()
+// NewPostgresStore opens a PostgreSQL database at connectionString and runs schema migrations.
+func NewPostgresStore(connectionString string) (*PostgresStore, error) {
+	db, err := sql.Open("postgres", connectionString)
 	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dataDir, "docketeer", "docketeer.db"), nil
-}
-
-func xdgDataDir() (string, error) {
-	if d := os.Getenv("XDG_DATA_HOME"); d != "" {
-		return d, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("cannot determine home directory: %w", err)
-	}
-	return filepath.Join(home, ".local", "share"), nil
-}
-
-// NewSQLiteStore opens (or creates) a SQLite database at dbPath and runs schema migrations.
-// Pass ":memory:" for an in-memory database (useful in tests).
-func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
-	if dbPath != ":memory:" {
-		if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-			return nil, fmt.Errorf("create db dir: %w", err)
-		}
+		return nil, fmt.Errorf("open postgres: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		return nil, fmt.Errorf("open sqlite: %w", err)
-	}
-
-	// Enable WAL mode and foreign keys.
-	pragmas := []string{
-		"PRAGMA journal_mode=WAL",
-		"PRAGMA foreign_keys=ON",
-		"PRAGMA busy_timeout=5000",
-	}
-	for _, p := range pragmas {
-		if _, err := db.Exec(p); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("set pragma (%s): %w", p, err)
-		}
-	}
-
-	dialect := migrator.NewSQLiteDialect()
+	dialect := migrator.NewPostgresDialect()
 	m := migrator.NewMigrator(db, dialect, "schema_migrations")
 	migrator.AddVersion1Migrations(m)
 
@@ -73,30 +31,31 @@ func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
-	return &SQLiteStore{db: db}, nil
+	return &PostgresStore{db: db}, nil
 }
 
 // Close releases the database connection.
-func (s *SQLiteStore) Close() error {
+func (s *PostgresStore) Close() error {
 	return s.db.Close()
 }
 
 // ExecRaw executes a raw SQL statement. Used by tooling (e.g. seed) that needs
 // to bypass the store's automatic timestamp behaviour.
-func (s *SQLiteStore) ExecRaw(query string, args ...any) error {
+func (s *PostgresStore) ExecRaw(query string, args ...any) error {
 	_, err := s.db.Exec(query, args...)
 	return err
 }
 
 // CreateItem inserts a new item and sets its ID and timestamps.
-func (s *SQLiteStore) CreateItem(item *task.Item) error {
+func (s *PostgresStore) CreateItem(item *task.Item) error {
 	now := time.Now()
 	item.CreatedAt = now
 	item.UpdatedAt = now
 
-	res, err := s.db.Exec(`
-		INSERT INTO items (kind, title, description, priority, status, project, due_date, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	err := s.db.QueryRow(`
+         INSERT INTO items (kind, title, description, priority, status, project, due_date, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id`,
 		string(item.Kind),
 		item.Title,
 		item.Description,
@@ -106,33 +65,29 @@ func (s *SQLiteStore) CreateItem(item *task.Item) error {
 		timeToSQL(item.DueDate),
 		item.CreatedAt.Unix(),
 		item.UpdatedAt.Unix(),
-	)
+	).Scan(&item.ID)
+
 	if err != nil {
 		return fmt.Errorf("create item: %w", err)
 	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return fmt.Errorf("get last insert id: %w", err)
-	}
-	item.ID = id
 	return nil
 }
 
 // UpdateItem updates all mutable fields of an existing item.
-func (s *SQLiteStore) UpdateItem(item *task.Item) error {
+func (s *PostgresStore) UpdateItem(item *task.Item) error {
 	item.UpdatedAt = time.Now()
 
 	_, err := s.db.Exec(`
-		UPDATE items SET
-			kind        = ?,
-			title       = ?,
-			description = ?,
-			priority    = ?,
-			status      = ?,
-			project     = ?,
-			due_date    = ?,
-			updated_at  = ?
-		WHERE id = ?`,
+         UPDATE items SET
+            kind        = $1,
+            title       = $2,
+            description = $3,
+            priority    = $4,
+            status      = $5,
+            project     = $6,
+            due_date    = $7,
+            updated_at  = $8
+         WHERE id = $9`,
 		string(item.Kind),
 		item.Title,
 		item.Description,
@@ -150,8 +105,8 @@ func (s *SQLiteStore) UpdateItem(item *task.Item) error {
 }
 
 // DeleteItem removes an item by ID. Associated notes are deleted via CASCADE.
-func (s *SQLiteStore) DeleteItem(id int64) error {
-	_, err := s.db.Exec(`DELETE FROM items WHERE id = ?`, id)
+func (s *PostgresStore) DeleteItem(id int64) error {
+	_, err := s.db.Exec(`DELETE FROM items WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("delete item %d: %w", id, err)
 	}
@@ -159,10 +114,10 @@ func (s *SQLiteStore) DeleteItem(id int64) error {
 }
 
 // GetItem returns a single item by ID.
-func (s *SQLiteStore) GetItem(id int64) (*task.Item, error) {
+func (s *PostgresStore) GetItem(id int64) (*task.Item, error) {
 	row := s.db.QueryRow(`
-		SELECT id, kind, title, description, priority, status, project, due_date, created_at, updated_at
-		FROM items WHERE id = ?`, id)
+         SELECT id, kind, title, description, priority, status, project, due_date, created_at, updated_at
+         FROM items WHERE id = $1`, id)
 	item, err := scanItem(row)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("item %d not found", id)
@@ -174,10 +129,10 @@ func (s *SQLiteStore) GetItem(id int64) (*task.Item, error) {
 }
 
 // ListItems returns all items ordered by created_at descending.
-func (s *SQLiteStore) ListItems() ([]task.Item, error) {
+func (s *PostgresStore) ListItems() ([]task.Item, error) {
 	rows, err := s.db.Query(`
-		SELECT id, kind, title, description, priority, status, project, due_date, created_at, updated_at
-		FROM items ORDER BY created_at DESC`)
+         SELECT id, kind, title, description, priority, status, project, due_date, created_at, updated_at
+         FROM items ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list items: %w", err)
 	}
@@ -195,32 +150,29 @@ func (s *SQLiteStore) ListItems() ([]task.Item, error) {
 }
 
 // AddNote inserts a new note for an item and sets its ID and timestamp.
-func (s *SQLiteStore) AddNote(note *task.Note) error {
+func (s *PostgresStore) AddNote(note *task.Note) error {
 	note.CreatedAt = time.Now()
 
-	res, err := s.db.Exec(`
-		INSERT INTO notes (item_id, content, created_at)
-		VALUES (?, ?, ?)`,
+	err := s.db.QueryRow(`
+         INSERT INTO notes (item_id, content, created_at)
+         VALUES ($1, $2, $3)
+         RETURNING id`,
 		note.ItemID,
 		note.Content,
 		note.CreatedAt.Unix(),
-	)
+	).Scan(&note.ID)
+
 	if err != nil {
 		return fmt.Errorf("add note: %w", err)
 	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return fmt.Errorf("get note last insert id: %w", err)
-	}
-	note.ID = id
 	return nil
 }
 
 // ListNotes returns all notes for an item ordered by created_at ascending.
-func (s *SQLiteStore) ListNotes(itemID int64) ([]task.Note, error) {
+func (s *PostgresStore) ListNotes(itemID int64) ([]task.Note, error) {
 	rows, err := s.db.Query(`
-		SELECT id, item_id, content, created_at
-		FROM notes WHERE item_id = ? ORDER BY created_at ASC`, itemID)
+         SELECT id, item_id, content, created_at
+         FROM notes WHERE item_id = $1 ORDER BY created_at ASC`, itemID)
 	if err != nil {
 		return nil, fmt.Errorf("list notes for item %d: %w", itemID, err)
 	}
@@ -240,7 +192,7 @@ func (s *SQLiteStore) ListNotes(itemID int64) ([]task.Note, error) {
 }
 
 // ListProjects returns all distinct non-empty project names, sorted alphabetically.
-func (s *SQLiteStore) ListProjects() ([]string, error) {
+func (s *PostgresStore) ListProjects() ([]string, error) {
 	rows, err := s.db.Query(`SELECT DISTINCT project FROM items WHERE project != '' ORDER BY project`)
 	if err != nil {
 		return nil, fmt.Errorf("list projects: %w", err)
@@ -260,7 +212,7 @@ func (s *SQLiteStore) ListProjects() ([]string, error) {
 
 // CompletionsLast7Days returns the count of tasks marked done on each of the past
 // 7 days. Index 0 is 6 days ago; index 6 is today.
-func (s *SQLiteStore) CompletionsLast7Days() ([]int, error) {
+func (s *PostgresStore) CompletionsLast7Days() ([]int, error) {
 	counts := make([]int, 7)
 
 	now := time.Now()
@@ -273,11 +225,11 @@ func (s *SQLiteStore) CompletionsLast7Days() ([]int, error) {
 
 		var count int
 		err := s.db.QueryRow(`
-			SELECT COUNT(*) FROM items
-			WHERE kind = 'task'
-			  AND status = 'done'
-			  AND updated_at >= ?
-			  AND updated_at < ?`,
+            SELECT COUNT(*) FROM items
+            WHERE kind = 'task'
+              AND status = 'done'
+              AND updated_at >= $1
+              AND updated_at < $2`,
 			dayStart.Unix(),
 			dayEnd.Unix(),
 		).Scan(&count)
