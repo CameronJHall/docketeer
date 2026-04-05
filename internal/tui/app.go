@@ -102,12 +102,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.formView = &fv
 		}
 		if a.confirmView != nil {
-			cv := NewConfirmView(a.confirmView.item, a.width, a.height)
-			a.confirmView = &cv
+			a.confirmView = new(NewConfirmView(a.confirmView.item, a.width, a.height))
 		}
 		if a.noteInput != nil {
-			ni := NewNoteInput(a.noteInput.item, a.detailView.contentWidth())
-			a.noteInput = &ni
+			a.noteInput = new(NewNoteInput(a.noteInput.item, a.detailView.contentWidth()))
 			a.detailView.SetNoteInput(a.noteInput)
 		}
 		return a, nil
@@ -211,28 +209,24 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, a.keys.Create):
 			projects, _ := a.store.ListProjects()
-			fv := NewFormView(task.KindTask, a.width, a.height, projects)
-			a.formView = &fv
+			a.formView = new(NewFormView(task.KindTask, a.width, a.height, projects))
 			a.view = viewForm
 
 		case key.Matches(msg, a.keys.CreateIdea):
 			projects, _ := a.store.ListProjects()
-			fv := NewFormView(task.KindIdea, a.width, a.height, projects)
-			a.formView = &fv
+			a.formView = new(NewFormView(task.KindIdea, a.width, a.height, projects))
 			a.view = viewForm
 
 		case key.Matches(msg, a.keys.Edit):
 			if item := a.listView.SelectedItem(); item != nil {
 				projects, _ := a.store.ListProjects()
-				fv := EditFormView(*item, a.width, a.height, projects)
-				a.formView = &fv
+				a.formView = new(EditFormView(*item, a.width, a.height, projects))
 				a.view = viewForm
 			}
 
 		case key.Matches(msg, a.keys.Delete):
 			if item := a.listView.SelectedItem(); item != nil {
-				cv := NewConfirmView(*item, a.width, a.height)
-				a.confirmView = &cv
+				a.confirmView = new(NewConfirmView(*item, a.width, a.height))
 				a.view = viewConfirm
 			}
 
@@ -284,8 +278,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, a.keys.AddNote):
 			if item := a.listView.SelectedItem(); item != nil {
-				ni := NewNoteInput(*item, a.detailView.contentWidth())
-				a.noteInput = &ni
+				a.noteInput = new(NewNoteInput(*item, a.detailView.contentWidth()))
 				a.detailView.SetNoteInput(a.noteInput)
 				a.view = viewNote
 			}

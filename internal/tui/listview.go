@@ -88,8 +88,7 @@ func (l *ListView) SelectedItem() *task.Item {
 	for _, g := range l.groups {
 		for i := range g.Items {
 			if idx == l.cursor {
-				item := g.Items[i]
-				return &item
+				return new(g.Items[i])
 			}
 			idx++
 		}

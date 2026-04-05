@@ -18,8 +18,8 @@ func Run(s store.Store) error {
 	p := func(v task.Priority) *task.Priority { return &v }
 	st := func(v task.Status) *task.Status { return &v }
 	daysAgo := func(n int) time.Time { return now.AddDate(0, 0, -n) }
-	future := func(n int) *time.Time { t := now.AddDate(0, 0, n); return &t }
-	past := func(n int) *time.Time { t := now.AddDate(0, 0, -n); return &t }
+	future := func(n int) *time.Time { ; return new(now.AddDate(0, 0, n)) }
+	past := func(n int) *time.Time { ; return new(now.AddDate(0, 0, -n)) }
 
 	type itemSpec struct {
 		item  task.Item
