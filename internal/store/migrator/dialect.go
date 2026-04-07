@@ -37,7 +37,7 @@ func (b *BaseDialect) DriverName() string {
 }
 
 func (b *BaseDialect) CreateTableSQL(table *Table) string {
-	sql := "CREATE TABLE " + b.dialect.Quote(table.Name) + " (\n"
+	sql := "CREATE TABLE IF NOT EXISTS " + b.dialect.Quote(table.Name) + " (\n"
 
 	for i, col := range table.Columns {
 		if col.IsPrimaryKey {
@@ -69,7 +69,7 @@ func (b *BaseDialect) CreateIndexSQL(tableName string, idx *Index) string {
 		quotedCols = append(quotedCols, quote(col))
 	}
 
-	return fmt.Sprintf("CREATE%s INDEX %s ON %s (%s);",
+	return fmt.Sprintf("CREATE%s INDEX IF NOT EXISTS %s ON %s (%s);",
 		unique, quote(idxName), quote(tableName), join(quotedCols, ", "))
 }
 
@@ -84,7 +84,7 @@ func (b *BaseDialect) DropIndexSQL(tableName string, idx *Index) string {
 }
 
 func (b *BaseDialect) AddColumnSQL(tableName string, col *Column) string {
-	return fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", b.dialect.Quote(tableName), col.String(b.dialect))
+	return fmt.Sprintf("ALTER TABLE %s ADD COLUMN IF NOT EXISTS %s", b.dialect.Quote(tableName), col.String(b.dialect))
 }
 
 func (b *BaseDialect) ColString(col *Column) string {

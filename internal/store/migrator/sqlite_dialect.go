@@ -1,7 +1,6 @@
 package migrator
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -21,7 +20,7 @@ func (d *SQLiteDialect) Quote(name string) string {
 	return "`" + name + "`"
 }
 
-func (d *SQLiteDialect) BindVar(n int) string {
+func (d *SQLiteDialect) BindVar(_ int) string {
 	return "?"
 }
 
@@ -47,31 +46,6 @@ func (d *SQLiteDialect) CreateTableSQL(table *Table) string {
 	return sql
 }
 
-func (d *SQLiteDialect) CreateIndexSQL(tableName string, idx *Index) string {
-	quote := d.Quote
-	var unique string
-	if idx.Type == UniqueIndex {
-		unique = " UNIQUE"
-	}
-
-	idxName := idx.XName(tableName)
-	quotedCols := make([]string, 0, len(idx.Cols))
-	for _, col := range idx.Cols {
-		quotedCols = append(quotedCols, quote(col))
-	}
-
-	return fmt.Sprintf("CREATE%s INDEX %s ON %s (%s);",
-		unique, quote(idxName), quote(tableName), join(quotedCols, ", "))
-}
-
-func (d *SQLiteDialect) DropTable(tableName string) string {
-	return d.BaseDialect.DropTable(tableName)
-}
-
-func (d *SQLiteDialect) DropIndexSQL(tableName string, idx *Index) string {
-	return d.BaseDialect.DropIndexSQL(tableName, idx)
-}
-
 func (d *SQLiteDialect) ColString(col *Column) string {
 	sql := d.Quote(col.Name) + " " + d.SQLType(col) + " "
 
@@ -83,20 +57,6 @@ func (d *SQLiteDialect) ColString(col *Column) string {
 	}
 
 	if !col.Nullable && !col.IsPrimaryKey {
-		sql += "NOT NULL "
-	}
-
-	if col.Default != "" {
-		sql += "DEFAULT " + col.Default + " "
-	}
-
-	return strings.TrimSpace(sql)
-}
-
-func (d *SQLiteDialect) ColStringNoPk(col *Column) string {
-	sql := d.Quote(col.Name) + " " + d.SQLType(col) + " "
-
-	if !col.Nullable {
 		sql += "NOT NULL "
 	}
 

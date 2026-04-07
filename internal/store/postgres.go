@@ -16,7 +16,7 @@ type PostgresStore struct {
 }
 
 // NewPostgresStore opens a PostgreSQL database at connectionString and runs schema migrations.
-func NewPostgresStore(connectionString string) (*PostgresStore, error) {
+func NewPostgresStore(connectionString string) (Store, error) {
 	db, err := sql.Open("postgres", connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("open postgres: %w", err)
