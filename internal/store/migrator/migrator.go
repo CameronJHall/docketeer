@@ -35,15 +35,6 @@ func NewMigrator(db *sql.DB, dialect Dialect, migrationLogTableName string) *Mig
 // initMigrationLogTable initializes the migration log table.
 // This must be called before running migrations.
 func (m *Migrator) initMigrationLogTable() error {
-	// Check if migration log table already exists
-	exists, err := m.tableExists(m.migrationLogTableName)
-	if err != nil {
-		return fmt.Errorf("check migration log table: %w", err)
-	}
-	if exists {
-		return nil
-	}
-
 	table := Table{
 		Name: m.migrationLogTableName,
 		Columns: []*Column{
@@ -58,42 +49,16 @@ func (m *Migrator) initMigrationLogTable() error {
 	}
 
 	createSQL := m.dialect.CreateTableSQL(&table)
-	_, err = m.db.Exec(createSQL)
-	if err != nil {
+	if _, err := m.db.Exec(createSQL); err != nil {
 		return fmt.Errorf("create migration log table: %w", err)
 	}
 
 	indexSQL := m.dialect.CreateIndexSQL(m.migrationLogTableName, table.Indices[0])
-	_, err = m.db.Exec(indexSQL)
-	if err != nil {
+	if _, err := m.db.Exec(indexSQL); err != nil {
 		return fmt.Errorf("create migration log index: %w", err)
 	}
 
 	return nil
-}
-
-func (m *Migrator) tableExists(tableName string) (bool, error) {
-	var exists int
-	var query string
-
-	switch m.dialect.DriverName() {
-	case SQLite:
-		query = fmt.Sprintf("SELECT 1 FROM sqlite_master WHERE type='table' AND name='%s'", tableName)
-	case Postgres:
-		quoted := m.dialect.Quote
-		query = fmt.Sprintf("SELECT 1 FROM %s WHERE %s = '%s'", quoted("pg_tables"), quoted("tablename"), tableName)
-	default:
-		return false, fmt.Errorf("unsupported dialect: %s", m.dialect.DriverName())
-	}
-
-	err := m.db.QueryRow(query).Scan(&exists)
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 // AddMigration registers a migration to be executed.
@@ -126,12 +91,10 @@ func (m *Migrator) runMigration(entry migrationEntry) error {
 	}
 
 	sql := entry.migration.SQL(m.dialect)
-	if sql == "" {
-		return nil
-	}
-
-	if err := m.executeSQL(sql); err != nil {
-		return err
+	if sql != "" {
+		if err := m.executeSQL(sql); err != nil {
+			return err
+		}
 	}
 
 	return m.logMigration(entry.migration.Id(), sql, true, "")

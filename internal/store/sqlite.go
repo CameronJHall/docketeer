@@ -17,29 +17,9 @@ type SQLiteStore struct {
 	db *sql.DB
 }
 
-// DefaultDBPath returns the XDG data dir path for the database.
-func DefaultDBPath() (string, error) {
-	dataDir, err := xdgDataDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dataDir, "docketeer", "docketeer.db"), nil
-}
-
-func xdgDataDir() (string, error) {
-	if d := os.Getenv("XDG_DATA_HOME"); d != "" {
-		return d, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("cannot determine home directory: %w", err)
-	}
-	return filepath.Join(home, ".local", "share"), nil
-}
-
 // NewSQLiteStore opens (or creates) a SQLite database at dbPath and runs schema migrations.
 // Pass ":memory:" for an in-memory database (useful in tests).
-func NewSQLiteStore(dbPath string) (*SQLiteStore, error) {
+func NewSQLiteStore(dbPath string) (Store, error) {
 	if dbPath != ":memory:" {
 		if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 			return nil, fmt.Errorf("create db dir: %w", err)
